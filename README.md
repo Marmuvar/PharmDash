@@ -1,13 +1,14 @@
 # PharmDash: Visualizing brand and generic pharmaceutical companies, their products, and their competition with an interactive dashboard
 
-[See the app](https://ipjoxk-mark-benmuvhar.shinyapps.io/PharmDashApp/)
-[See the code](/PharmDashApp)
+[`See the app`](https://ipjoxk-mark-benmuvhar.shinyapps.io/PharmDashApp/)  
+
+[`See the code`](/PharmDashApp)
 
 ## Overview
 
-I've spent my career in pharmaceutical development.  While this work aimed to bring different dosage forms to market faster than competitors, I never had a clear view of the magnitude of products and companies in the industry.  This motivated me to develop the PharmDash app.
+I've spent my career in pharmaceutical development.  While this work aimed to bring different dosage forms to market faster than competitors, I never had a clear view of the magnitude of products and companies in the industry.  Also, the impact of patents on delaying generic product introduction across the industry seemed an abstract, albeit certain, competitive factor.  This motivated me to develop the PharmDash app.
 
-PharmDash provides an interactive dashboard for visualizing the generic and branded pharmaceutical industry.  Briefly, it  allows the user to compare drug companies, dosage forms, and the impact of competitive factors.  The filtered context shows details of individual products released in a given year.  This outlines who generic and brand companies compete against and the rate that products are introduced to the market.
+PharmDash provides an interactive dashboard for visualizing the generic and branded pharmaceutical industry.  Briefly, it  allows the user to compare drug companies, dosage forms, and the impact of patents.  The filtered context shows details of individual products released in a given year.  This outlines who generic and brand companies compete against and the rate that products are introduced to the market.
 
 Generic companies thrive by delivering a range of products to market as soon as federal regulations allow them to be sold.  The app provides a high level overview of top companies based on total products delivered for specific administration routes, such as by mouth or by injection.  Individual company performance presents the number of products made each year, how soon after the brand they received approval, and the time of approval relative to any brand product patent expiry.   Any approved products that received the FDA's "first to file" designation are highlighted as a key performance attribute because of the associated benefit to product sales.  Last, details of the specific products approved each year and their brand reference are presented.  In total, these details measure how generic companies perform against key competitive obstacles.  
 
@@ -20,7 +21,7 @@ Data are based on the the United States Food and Drug Administration's "Approved
 
 ### General
 
-The user first selects from two tabs that orient the data from a generic or brand pharmaceutical company viewpoint.  This selects companies and sets the available comparisons.  In both presentations, the user is able to select one specific company and one specific drug product administration route.  Companies may be selected from a list or typed into the box.  
+The user first selects from two tabs that orient the data from a generic or brand pharmaceutical company viewpoint.  This selects companies and sets the available comparisons.  In both presentations, the user is able to select one specific company and one specific drug product administration route.  Companies may be selected from a list or typed into the box.  Company selection is filtered by the selected administration route.  If the company has not made a product for that route, then it will not be accessible by typing the name until a valid route is selected.  
 
 ### Generic Industry
 
@@ -50,3 +51,21 @@ The 4 lower graphs provide an overview of brand company approvals compared to pa
 Clicking on the bar plots in items 1 - 3 displays details for related generic products.  The patent summary in item 4 does not display any additional information when clicked.  
 
 The last graph provides a chronological display of brand product approvals along the x axis and generic product approval dates along the y axis.  Total count is displayed through the tile color.
+
+## Improvements and Issues  
+
+Potential improvements to the app consider the following UI and code changes:   
+
+*Add display of patent information to branded products  
+
+*Display mixture of patented vs. unpatented products
+
+*Refactor to make the UI and Server code modular for each tab
+
+Known issues with the app:  
+
+*In limited cases, there are discrepancies between the approval date listed in the brand product table and the generic approval table.  As a result, no generic data is displayed when clicking on bars in the brand graph.
+
+This issue occurs when a lower brand strength was approved at a later date, resulting in a renumbering of the product numbers by the FDA.  During data consolidation, the tables relied on the assigned product number rather than date to determine the earliest approval date.  In future updates, the earliest date should be used.  
+
+

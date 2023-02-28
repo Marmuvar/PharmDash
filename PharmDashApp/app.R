@@ -24,7 +24,11 @@ gen_tbl <- apps_w_pats_stats %>%
          TTM_first = interval(app_date_generic, 
                               first_pat_expiry) / dyears(1),
          TTM_last = interval(app_date_generic, 
-                             last_pat_expiry) / dyears(1))
+                             last_pat_expiry) / dyears(1)) %>%
+  filter(is.na(gen_sponsor) == FALSE) 
+
+all_gen_tbl <- gen_tbl %>%
+  filter(between(year(app_date_brand), 1982, 2021))
 
 gen_len <- length(gen_tbl$gen_sponsor)
 
@@ -60,6 +64,7 @@ brand_tbl <- brands_w_pats_stats %>%
          TF_last = interval(app_date, 
                               last_pat_expiry) / dyears(1))
 
+brand_len <- length(brand_tbl$brand_sponsor)
 
 #Pre-define limits for constant scal;es in graphs:
 gen_file_ranges <- filter(gen_tbl, ftf == 1) %>%
@@ -84,7 +89,7 @@ gen_map_ft_ranges <- c(min(gen_file_ranges[c("ftf","ftl", "ftm")]),
 ui <- fluidPage(
   # Application title
   titlePanel(
-    "Comparisson of Brand and Generic Pharmaceutical Products, 1982 - 2021"
+    "Brand and Generic Pharmaceutical Companies and Products, 1982 - 2021"
   ),
   tabsetPanel(
     id = "iApp",
@@ -127,37 +132,41 @@ ui <- fluidPage(
           htmlOutput("x_value"),
           width = 3
         ),
-        
         column(
           width = 9,
-          style = 'padding:40px;',
           fluidRow(
             column(
-              width = 6,
-              plotOutput("prod_ct_heat_plot",
-                         click = "gen_year_click",
-              )
-            ),
-            column(
-              width = 6,
-              plotOutput("ttf_pat_heat_plot",
-                         click = "gen_year_click",
-              )
-            ),
-          fluidRow(
-            column(
-              width = 6,
-              plotOutput("ttm_heat_plot",
-                         click = "gen_year_click",
+              width = 12,
+              style = 'padding:40px;',
+              fluidRow(
+                column(
+                  width = 6,
+                  plotOutput("prod_ct_heat_plot",
+                             click = "gen_year_click",
+                  )
+                ),
+                column(
+                  width = 6,
+                  plotOutput("ttf_pat_heat_plot",
+                             click = "gen_year_click",
+                  )
+                )
               ),
-            ),
-            column(
-              width = 6,
-              plotOutput("ttl_pat_heat_plot",
-                         click = "gen_year_click",
+              fluidRow(
+                column(
+                  width = 6,
+                  plotOutput("ttm_heat_plot",
+                             click = "gen_year_click",
+                  ),
+                ),
+                column(
+                  width = 6,
+                  plotOutput("ttl_pat_heat_plot",
+                             click = "gen_year_click",
+                )
               )
             )
-          ),
+          )  
         )
       )
     ),
@@ -266,15 +275,15 @@ server <- function(input, output) {
   fct_lump_limit <- function(X, n){
     ct = levels(factor(X)) %>%
       length()
-    print(paste("length = ", ct))
     fct_lump_n(f = X,
                n = min(n, ct),
                ties.method = "min")
   }
   
-  gen_react <- reactive({filter(gen_tbl, 
-                                admin_route == input$iRoute,
-                                !is.na(gen_sponsor)) 
+  gen_react <- reactive({filter(
+    gen_tbl, 
+    admin_route == input$iRoute,
+    !is.na(gen_sponsor)) 
   })
   
   #Adding .$gen_sponsor gave correct reactive filter.  Not sure why...
@@ -291,61 +300,80 @@ server <- function(input, output) {
     filter(gen_tbl,
            gen_sponsor == input$iSponsor,
            admin_route == input$iRoute) %>%
-    group_by(year = year(app_date_generic), dosage_form) %>%
+    group_by(year = year(app_date_generic), 
+             dosage_form) %>%
     mutate(dosage_form = as.factor(dosage_form)
            )
     })
-  
-  dose_react <- reactive({
-    filter(gen_tbl,
-           admin_route == input$iRoute) %>%
-      group_by(year = year(app_date_generic), dosage_form) %>%
-      mutate(dosage_form = as.factor(dosage_form)
-            )
-  })
-  
+
+  #General filter for all brand products based on lookup route
   brand_react <- reactive({
     filter(brand_tbl, 
            admin_route == input$iBRoute, 
-           !is.na(brand_sponsor)) %>%
-    mutate(brand_sponsor = fct_lump_n(brand_sponsor, 
-                                      40, 
-                                      ties.method = "min")) %>%
-    filter(!brand_sponsor %in% c("Other"))
-           })
+           !is.na(brand_sponsor))
+    })
   
-  brand_sponsor_react <- reactive({filter(brand_react(),
-                               brand_sponsor == input$iBSponsor,
-                               admin_route == input$iBRoute)})
+  #Adding .$brand_sponsor gave correct reactive filter.  Not sure why...
+  #Creating separate context here for 
+  # filtered values in graphs vs unfiltered values for pulldown select.
   
-  gb_react <- reactive({filter(gen_tbl, admin_route == input$iBRoute, 
-                               brand_sponsor == input$iBSponsor)})
-  gb_sponsor_react <- reactive({filter(gen_tbl, brand_sponsor == input$iBSponsor)})
+  brand_react_trim <- reactive({brand_react() %>%
+      mutate(brand_sponsor = fct_lump_limit(.$brand_sponsor, 40)) %>%
+      filter(!brand_sponsor %in% c("Other", "NA"))
+  })
+
+  #Specific filter context for company-specific graphs
+  brand_sponsor_react <- reactive({
+    filter(brand_tbl,
+          brand_sponsor == input$iBSponsor,
+          admin_route == input$iBRoute) %>%
+    group_by(year = year(app_date),
+           dosage_form) %>%
+    mutate(dosage_form = as.factor(dosage_form))
+    })
   
-  
-  #Do this once to initialize graphs and select bars
+  gb_sponsor_react <- reactive({filter(all_gen_tbl, 
+                                       brand_sponsor == input$iBSponsor, 
+                                       admin_route == input$iBRoute,
+                                       is.na(gen_sponsor) == FALSE
+                                       )
+                              })
+  #Control selections available for each graph
+  #Company list is dynamically filtered for dosage route selection. 
   updateSelectizeInput(session = getDefaultReactiveDomain(), 
                        inputId = "iRoute", 
                        choices = gen_tbl$admin_route,
                        selected = "Oral",
                        server = TRUE)
+  observe({
+    gen_sponsor_by_dose <- gen_tbl %>%
+      filter(admin_route == input$iRoute)
+    
   updateSelectizeInput(session = getDefaultReactiveDomain(), 
                        inputId = "iSponsor", 
-                       choices = sort(gen_tbl$gen_sponsor),
+                       #choices = sort(gen_tbl$gen_sponsor),
+                       choices = sort(gen_sponsor_by_dose$gen_sponsor),
                        selected = "Mylan",
                        server = TRUE,
                        options = list(maxOptions = gen_len))
+  })
   updateSelectizeInput(session = getDefaultReactiveDomain(), 
                        inputId = "iBRoute", 
                        choices = brand_tbl$admin_route,
                        selected = "Oral",
                        server = TRUE)
+  observe({
+    sponsor_by_dose <- brand_tbl %>%
+      filter(admin_route == input$iBRoute)
+    
   updateSelectizeInput(session = getDefaultReactiveDomain(), 
                        inputId = "iBSponsor", 
-                       choices = sort(brand_tbl$brand_sponsor),
+                       #choices = sort(brand_tbl$brand_sponsor),
+                       choices = sort(sponsor_by_dose$brand_sponsor),
                        selected = "Pfizer",
                        server = TRUE,
                        options = list(maxOptions = 5000))
+  })
   
   base_theme <- theme(panel.background = element_rect(fill="lightsteelblue3"),
                       axis.text.x = element_text(size = 10, angle = 90),
@@ -354,9 +382,11 @@ server <- function(input, output) {
                       axis.title.y = element_text(size = 12),
                       axis.ticks.x = element_blank(),
                       panel.grid.major.x = element_blank(),
-                      plot.title = element_text(size = 16, hjust = 0.5),
-                      plot.subtitle = element_text(size = 12, hjust = 0.5),
-                      plot.background = element_rect(color = "black")
+                      plot.title = element_text(size = 16, hjust = 0),
+                      plot.subtitle = element_text(size = 12, hjust = 0),
+                      plot.background = element_rect(color = "black"),
+                      legend.position = "bottom",
+                      legend.justification = "center"
   )
   
   hm_theme <- base_theme + theme(legend.position="bottom",
@@ -375,13 +405,11 @@ server <- function(input, output) {
            subtitle = subtitle,
            x = xLab,
            y = yLab) +
-      scale_x_continuous(limits = c(1981, 2021)) + 
+      scale_x_continuous(limits = c(1982, 2022)) + 
       scale_fill_continuous(type = "viridis", direction = 1,
                             begin = 0, 
                             option = "E",
-                            limits = fill_range
-
-      ) +
+                            limits = fill_range) +
       guides(fill = guide_colorbar(title = barLab))
   }
   
@@ -390,7 +418,6 @@ server <- function(input, output) {
   plt_heatmap_spec <- function(df, xCol, yCol, fill_Val,
                           main, subtitle, xLab, yLab, barLab,  n_br = 4, 
                           fill_range = NULL){
-    
     dosage = sponsor_react() %>%
       summarize(ct = n()) %>%
       ungroup() %>%
@@ -406,7 +433,7 @@ server <- function(input, output) {
            subtitle = subtitle,
            x = xLab,
            y = yLab) +
-      scale_x_continuous(limits = c(1981, 2021)) + 
+      scale_x_continuous(limits = c(1982, 2022)) + 
       scale_y_discrete(limits = dosage_types ) +
       
       scale_fill_continuous(type = "viridis", direction = 1, begin = 0, 
@@ -452,7 +479,7 @@ server <- function(input, output) {
 
     ggplot(tb, aes(x = !!xCol, y = !!yCol)) +
       geom_col(aes(fill = !!catCol), position  = "dodge") +
-      scale_fill_discrete(type = c("gold", "deepskyblue3")) +
+      scale_fill_discrete(type = c("deepskyblue3", "gold")) +
       labs(title = main, subtitle = subtitle, x = xLab, y = yLab) +
       base_theme
   }
@@ -476,7 +503,7 @@ server <- function(input, output) {
   })
   
   observe({
-    if (is.null(input$gen_ind_click$x)) return("")
+    if (is.null(input$gen_ind_click$x)) return("Select a company from dropdown or click on top 40 graph to display details.")
     else {
       new_choices <- gen_react_trim() %>%
         select(gen_sponsor)
@@ -490,7 +517,7 @@ server <- function(input, output) {
   })
   
   output$gen_spon <- renderText({
-    if (is.null(input$gen_year_click$x)) return("")
+    if (is.null(input$gen_year_click$x)) return("No year selected")
     else {
       dosage <- sponsor_react() %>%
         summarize(ct = n()) %>%
@@ -499,7 +526,6 @@ server <- function(input, output) {
         distinct() %>%
         mutate(dosage_form = as.factor(as.character(dosage_form))) 
       dosage <- levels(dosage$dosage_form)
-      df_name <- dosage[round(input$gen_year_click$y)]
       year <- round(input$gen_year_click$x)
       HTML("You've selected <code>", year, "</code>",
       )
@@ -538,46 +564,61 @@ server <- function(input, output) {
   })
   
 #Block for interacting with brand tab graphs
+  brand_start_msg <- "Select a company from dropdown or click on top 40 graph to display details."
   
   output$brand_x_value <- renderText({
-    if (is.null(input$brand_ind_click$x)) return("")
+    if (is.null(input$brand_ind_click$x)) return(brand_start_msg)
     else {
-      lvls <- levels(brand_sponsor_react()$brand_sponsor)
+      lvls <- levels(brand_react_trim()$brand_sponsor)
       name <- lvls[round(input$brand_ind_click$x)]
-      updateSelectizeInput(session = getDefaultReactiveDomain(),
-                           inputId = "iBSponsor",
-                           choices = NULL,
-                           selected = name,
-                           server = FALSE)
       HTML("You've selected <code>", name, "</code>"
       )
     }
   })
   
+  brand_lower_msg <- "Click on lower graphs to display product details for the year"
+  
   output$brand_prod <- renderText({
-    if (is.null(input$brand_year_click$x)) return("")
+    if (is.null(input$brand_year_click$x)) return(brand_lower_msg)
     else {
       year <- round(input$brand_year_click$x)
-      HTML("You've selected <code>", year, "</code>"
+      HTML("You have selected <code>", year, "</code>",
       )
     }
   })
   
-  output$gen_of_brands <- renderPrint({
-    if (is.null(input$brand_year_click$x)) return()
+  observe({
+    if (is.null(input$brand_ind_click$x)) return(brand_lower_msg)
     else {
-      keeprows <- round(input$brand_year_click$x) == 
-                     year(gb_sponsor_react()$app_date_brand)
-      keeprows <- gb_sponsor_react()[keeprows, ] %>%
+      new_choices <- brand_react_trim() %>%
+        select(brand_sponsor)
+      lvls <- levels(new_choices$brand_sponsor)
+      name <- lvls[round(input$brand_ind_click$x)]
+      updateSelectizeInput(session = getDefaultReactiveDomain(),
+                           inputId = "iBSponsor",
+                           selected = name,
+                           server = FALSE)
+    }
+  })
+  
+  output$gen_of_brands <- renderPrint({
+    if (is.null(input$brand_year_click$x)) return(brand_lower_msg)
+    else {
+      x_year <- round(input$brand_year_click$x)
+      keeprows <- filter(all_gen_tbl,
+                         brand_sponsor == input$iBSponsor,
+                         admin_route == input$iBRoute,
+                         year(app_date_brand) == x_year
+      ) %>%
         select(ds_name, admin_route, 
                dosage_form, gen_sponsor, app_date_generic) %>%
         arrange(ds_name, dosage_form, app_date_generic)
       kable(keeprows, 
             format = "html",
             align = "c",
-            caption = paste("Details of future generic products for",
-                            "brand products introduced this year.")
-            )%>%
+            caption = paste("Details of Future Generic Products for",
+                            "Brand Products Introduced this Year.")
+            ) %>%
         kable_styling(font_size = 8)
     }
   })
@@ -588,12 +629,11 @@ server <- function(input, output) {
   gen_react_trim() %>%
       plt_box(xCol = "gen_sponsor",
           yCol = "TTM_mkt",
-          main = "Time between Generic and Branded Drug Approval", 
+          main = "Time between Generic and \nBranded Drug Approval", 
           subtitle =  "Top 40 companies by Selected Route",
           xLab = "Company",
           yLab = "Time after Branded Approval")
-      }          
-  )
+  })
 
   output$prod_ct_heat_plot <- renderPlot({
     sponsor_react() %>% 
@@ -601,14 +641,13 @@ server <- function(input, output) {
       plt_heatmap(xCol = "year", 
                   yCol = "dosage_form", 
                   fill_Val = "val", 
-                  main = "Products per Year by Dosage Form", 
+                  main = "Products per Year \nby Dosage Form", 
                   subtitle = paste(input$iSponsor),
                   xLab = "Year",
                   yLab = "Dosage Form",
                   barLab = "Count",
                   fill_range = gen_map_ft_ranges)
-  }
-  )
+  })
   
   #Use yCol = sponsor_react()$dosage form
   #Ensures correct alignment of click$y and selection of correct dosage units
@@ -626,8 +665,7 @@ server <- function(input, output) {
                   yLab = "Dosage Form",
                   barLab = "Count",
                   fill_range = gen_map_ft_ranges)
-  }
-  )
+  })
   
   output$ttf_pat_heat_plot <- renderPlot({
     sponsor_react() %>%
@@ -635,14 +673,13 @@ server <- function(input, output) {
       plt_heatmap(xCol = "year", 
                   yCol = "dosage_form", 
                   fill_Val = "val", 
-                  main = "Mean Generic Approval Time after First Brand Patent Expiry", 
+                  main = "Mean Generic Approval Time \nafter First Brand Patent Expiry", 
                   subtitle = paste(input$iSponsor),
                   xLab = "Year",
                   yLab = "Dosage Form",
                   barLab = "mean Years",
                   fill_range = gen_map_ft_ranges)
-  }
-  )
+  })
   
   output$ttl_pat_heat_plot <- renderPlot({
     sponsor_react() %>%
@@ -650,14 +687,13 @@ server <- function(input, output) {
       plt_heatmap(xCol = "year", 
                   yCol = "dosage_form", 
                   fill_Val = "val", 
-                  main = "Mean Generic Approval Time after Last Brand Patent Expiry", 
+                  main = "Mean Generic Approval Time \nafter Last Brand Patent Expiry", 
                   subtitle = paste(input$iSponsor),
                   xLab = "Year",
                   yLab = "Dosage Form",
                   barLab = "mean Years",
                   fill_range = gen_map_ft_ranges)
-  }
-  )
+  })
   
   output$ttm_heat_plot <- renderPlot({
     sponsor_react() %>%
@@ -665,7 +701,7 @@ server <- function(input, output) {
       plt_heatmap(xCol = "year", 
                   yCol = "dosage_form", 
                   fill_Val = "val", 
-                  main = "Mean Generic Approval Time after Brand Approval", 
+                  main = "Mean Generic Approval Time \nafter Brand Approval", 
                   subtitle = paste(input$iSponsor),
                   xLab = "Year",
                   yLab = "Dosage Form",
@@ -676,7 +712,7 @@ server <- function(input, output) {
 #Block for Brand Plots
   
   output$brand_col_plot <- renderPlot({
-    brand_react() %>%
+    brand_react_trim() %>%
       group_by(brand_sponsor, admin_route, app_nums_brand) %>%
       summarize(val = n()) %>%
       plt_col(xCol = "brand_sponsor",
@@ -696,7 +732,7 @@ server <- function(input, output) {
               main = "Approval vs. First Patent Expiry", 
               subtitle = paste("Admin. Route = ", input$iBRoute),
               xLab = "Year",
-              yLab = "Product Count")
+              yLab = "Mean Years before First Expiry")
   })
   
   output$brand_TFL_plot <- renderPlot({
@@ -708,9 +744,9 @@ server <- function(input, output) {
               main = "Approval vs. Last Patent Expiry", 
               subtitle = paste("Admin. Route = ", input$iBRoute),
               xLab = "Year",
-              yLab = "Product Count")
-    
+              yLab = "Mean Years before Last Expiry")
   })
+
   output$brand_gen_ct_plot <- renderPlot({
     brand_sponsor_react() %>%
       group_by(year = year(app_date)) %>%
@@ -719,12 +755,12 @@ server <- function(input, output) {
       plt_col_multi(xCol = "year",
               yCol = "value",
               catCol = "name",
-              main = "Brand Product vs. Future Generic Product Applications", 
+              main = "Brand Product vs. \nFuture Generic Product Applications", 
               subtitle = paste("Admin. Route = ", input$iBRoute),
               xLab = "Year",
               yLab = "Product Count")
-    
   })
+  
   output$brand_gen_spon_plot <- renderPlot({
     gb_sponsor_react() %>%
       group_by(year = year(app_date_brand), sponsor.y) %>%
@@ -734,7 +770,7 @@ server <- function(input, output) {
       plt_col_multi(xCol = "year",
                     yCol = "value",
                     catCol = "name",
-                    main = "Brand Applications vs. Unique Generic Competitors", 
+                    main = "Brand Applications vs. \nUnique Generic Competitors", 
                     subtitle = paste("Admin. Route = ", input$iBRoute),
                     xLab = "Year",
                     yLab = "Product Count")
@@ -756,7 +792,7 @@ server <- function(input, output) {
   })
   
   output$brand_comp_to_year <- renderPlot({
-    gb_react() %>%
+    gb_sponsor_react() %>%
       mutate(app_date_brand = year(app_date_brand),
              app_date_generic = year(app_date_generic)) %>%
       na.omit() %>%
@@ -773,7 +809,7 @@ server <- function(input, output) {
                   barLab = "Count",
                   n_br = min(max(.$g_ct), 6, na.rm = TRUE)) +
       geom_abline(slope = 1, intercept = 0) +
-      scale_y_continuous(limits = c(1981, 2021)) +
+      scale_y_continuous(limits = c(1982, 2022)) +
       theme(legend.position = "right")
   })
 }

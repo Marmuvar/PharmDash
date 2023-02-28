@@ -17,7 +17,7 @@ Data are based on the the United States Food and Drug Administration's "Approved
 
 ### General
 
-The user first selects from two tabs that orient the data from a generic or brand pharmaceutical company viewpoint.  This selects companies and sets the available comparisons.  In both presentations, the user is able to select one specific company and one specific drug product administration route.  Companies may be selected from a list or typed into the box.  
+The user first selects from two tabs that orient the data from a generic or brand pharmaceutical company viewpoint.  This selects companies and sets the available comparisons.  In both presentations, the user is able to select one specific company and one specific drug product administration route.  Companies may be selected from a list or typed into the box.  Company selection is filtered by the selected administration route.  If the company has not made a product for that route, then it will not be accessible by typing the name until a valid route is selected.  
 
 ### Generic Industry
 
